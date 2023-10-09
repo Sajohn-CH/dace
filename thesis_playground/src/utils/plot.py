@@ -236,6 +236,7 @@ def rotate_xlabels(ax: matplotlib.axis.Axis, angle: int = 45, replace_dict: Dict
     for label in labels:
         if label.get_text() in replace_dict:
             label.set(text=replace_dict[label.get_text()])
+    # print(labels)
     ax.set_xticklabels(labels, rotation=angle, horizontalalignment='right')
 
 

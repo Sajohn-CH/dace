@@ -419,8 +419,16 @@ def plot_bars(experiment_id: int, share_y: bool = False):
             ax.set_ylabel('Runtime [ms]')
         else:
             ax.set_ylabel('')
-        rotate_xlabels(ax, replace_dict={'baseline': 'No optimizations', 'k-caching': 'K-caching',
-                                         'change-strides': 'Changed array order', 'all': 'Both'})
+        # rotate_xlabels(ax, angle=0, replace_dict={'baseline': 'No optimizations', 'k-caching': 'K-caching',
+        #                                  'change-strides': 'Changed array order', 'all': 'Both'})
+        # rotate_xlabels(ax, angle=30)
+
+    print(axes[1][0].get_xticklabels())
+    replace_dict = {'baseline': 'No optimizations', 'k-caching': 'K-caching',
+                  'change-strides': 'Changed array order', 'all': 'Both'}
+    rotate_xlabels(axes[1][0], angle=30, replace_dict=replace_dict)
+    rotate_xlabels(axes[1][1], angle=30, replace_dict=replace_dict)
+    rotate_xlabels(axes[1][2], angle=30, replace_dict=replace_dict)
 
     figure.tight_layout()
     save_plot(os.path.join(get_full_cloudsc_plot_dir(data_dict['node']), 'runtime_bar_cuda.pdf'))

@@ -15,6 +15,8 @@ from dace.frontend.fortran import fortran_parser
 from dace.transformation.interstate import StateFusion, LoopToMap, RefineNestedAccess
 from dace.transformation.dataflow import MapExpansion, MapCollapse, MapToForLoop
 from dace.transformation.passes.simplify import SimplifyPass
+from dace.transformation.subgraph.composite import CompositeFusion
+from dace.transformation.subgraph import helpers as xfsh
 
 from execute.my_auto_opt import change_strides, auto_optimize_phase_1
 from utils.log import setup_logging
@@ -248,6 +250,50 @@ def loop_to_map(folder: str):
     save(sdfg, folder)
 
 
+def k_caching_simple(folder: str):
+    sdfg = dace.SDFG('before_k_caching')
+    sdfg.add_array('A', [5], dace.float64, transient=True)
+    sdfg.add_array('B', [5], dace.float64)
+    state = sdfg.add_state()
+
+    task1, mentry1, mexit1 = state.add_mapped_tasklet(
+            name="map1",
+            map_ranges={"i": "0:5"},
+            inputs={},
+            outputs={'a': Memlet(data='A', subset='i')},
+            code='a = i',
+            external_edges=True,
+            propagate=True)
+
+    task2, mentry2, mexit2 = state.add_mapped_tasklet(
+            name="map2",
+            map_ranges={"i": "1:5"},
+            inputs={'a1': Memlet(data='A', subset='i'), 'a2': Memlet(data='A', subset='i-1')},
+            outputs={'b': Memlet(data='B', subset='i')},
+            code='b = a1 - a2',
+            external_edges=True)
+
+    to_remove_access = state.in_edges(mentry2)[0]
+    state.add_memlet_path(state.out_edges(mexit1)[0].dst, mentry2, memlet=Memlet(data='A', subset='0:5'), dst_conn='IN_A')
+    state.remove_edge(to_remove_access)
+    state.remove_node(to_remove_access.src)
+    subgraph = xfsh.subgraph_from_maps(sdfg, state, [mentry1, mentry2])
+    save(sdfg, folder)
+    cf = CompositeFusion()
+    cf.setup_match(subgraph)
+    # Without the K-caching enabled the maps can not be fused
+    assert not cf.can_be_applied(sdfg, subgraph)
+    cf.subgraph_fusion_properties = {
+             'max_difference_start': 1,
+             'max_difference_end': 0
+             }
+    assert cf.can_be_applied(sdfg, subgraph)
+    cf.apply(sdfg)
+    sdfg.validate()
+    sdfg.name = 'after_k_caching'
+    save(sdfg, folder)
+
+
 def main():
     parser = ArgumentParser()
     parser.add_argument('graph_folder', help='Path to where all the SDFGs should be saved')
@@ -262,6 +308,7 @@ def main():
     change_strides_example(args.graph_folder)
     refine_memlets(args.graph_folder)
     loop_to_map(args.graph_folder)
+    k_caching_simple(args.graph_folder)
 
 
 if __name__ == '__main__':
